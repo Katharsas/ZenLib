@@ -13,8 +13,11 @@ if(MSVC)
 endif()
 
 # 3rd-party dependencies
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(lib/double-conversion)
 add_subdirectory(lib/libsquish)
 
+include_directories(lib/double-conversion/double-conversion)
 include_directories(lib/glm/glm)
 include_directories(lib/libsquish)
 include_directories(.)

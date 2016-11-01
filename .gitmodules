@@ -4,3 +4,6 @@
 [submodule "lib/libsquish"]
 	path = lib/libsquish
 	url = https://github.com/tito/libsquish.git
+[submodule "lib/double-conversion"]
+	path = lib/double-conversion
+	url = https://github.com/google/double-conversion.git
