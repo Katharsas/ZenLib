@@ -58,6 +58,7 @@ namespace Utils
 			for (auto& v : mesh.vertices)
 			{
 				builder.AddCharacter('v');
+				builder.AddCharacter('t');
 				builder.AddCharacter(' ');
 				dConverter.ToFixed((double)v.TexCoord.x, decimals, &builder);
 				builder.AddCharacter(' ');
@@ -77,6 +78,7 @@ namespace Utils
 			for (auto& v : mesh.vertices)
 			{
 				builder.AddCharacter('v');
+				builder.AddCharacter('n');
 				builder.AddCharacter(' ');
 				dConverter.ToFixed((double)v.Normal.x, decimals, &builder);
 				builder.AddCharacter(' ');
