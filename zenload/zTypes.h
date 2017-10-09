@@ -14,6 +14,25 @@ namespace ZenLoad
 	};
 
 	/**
+	 * Used by zCVobSound
+	 */
+	enum SoundMode : uint32_t
+	{
+		SM_LOOPING,
+		SM_ONCE,
+		SM_RANDOM
+	};
+
+	/**
+	 * Used by zCVobSound
+	 */
+	enum SoundVolType
+	{
+		SVT_SPHERE = 0,
+		SVT_ELLIPSOID
+	};
+
+	/**
 	 * @brief Maximum amount of nodes a skeletal mesh can render
 	 */
 	const size_t MAX_NUM_SKELETAL_NODES = 96;
@@ -129,6 +148,18 @@ namespace ZenLoad
 	 */
 	struct zCVobData : public ParsedZenObject
 	{
+        enum EVobType
+        {
+            VT_zCVob,
+            VT_oCItem,
+            VT_oCMOB,
+            VT_oCMobInter,
+            VT_oCMobContainer,
+            VT_zCVobLight,
+        };
+
+        EVobType vobType;
+
 		uint32_t pack;
 		std::string presetName;
 		ZMath::float3 bbox[2];
@@ -187,6 +218,41 @@ namespace ZenLoad
 			std::string onStateFunc;
 			bool		rewind;
 		}oCMobInter;
+
+		struct
+		{
+            bool        locked;
+			std::string keyInstance;
+			std::string pickLockStr;
+			std::string contains;
+		}oCMobContainer;
+
+		struct
+		{
+			std::string lightPresetInUse;
+			uint32_t lightType;
+			float range;
+			uint32_t color;
+			float spotConeAngle;
+			bool lightStatic;
+            uint32_t lightQuality;
+			std::string lensflareFX;
+		}zCVobLight;
+
+		struct
+		{
+			float sndVolume;
+			SoundMode sndType;
+			float sndRandDelay;
+			float sndRandDelayVar;
+			bool sndStartOn;
+			bool sndAmbient3D;
+			bool sndObstruction;
+			float sndConeAngle;
+			SoundVolType sndVolType;
+			float sndRadius;
+			std::string sndName;
+		}zCVobSound;
 
 		std::vector<zCVobData> childVobs;
 	};
@@ -327,6 +393,7 @@ namespace ZenLoad
 		std::vector<zCVobData> rootVobs;
 		zCWayNetData waynet;
 		zCBspTreeData bspTree;
+		size_t numVobsTotal;
 	};
 
 
@@ -458,25 +525,25 @@ namespace ZenLoad
 
 #pragma pack(pop)
 
-	/**
+    /**
 	* @brief Information about a triangle in the World. Contains whether the triangle 
 	*		  belongs to an outside/inside location, the static lighting colors of the edges,
 	*		  material-information and to which sector this belongs, amongst others
 	*/
-	struct WorldTriangle
-	{
-		/**
+    struct WorldTriangle
+    {
+        /**
 		* @brief Returns whether this triangle is outside or inside
 		*/
-		bool isOutside() const { return !flags.sectorPoly; }
+        bool isOutside() const { return !flags.sectorPoly; }
 
-		/**
+        /**
 		* @brief Returns the interpolated lighting value for the given position on the triangle
 		*/
-		
-                ZMath::float4 interpolateLighting(const ZMath::float3& position) const
-		{
-			/*float u,v,w;
+
+        ZMath::float4 interpolateLighting( const ZMath::float3& position ) const
+        {
+            /*float u,v,w;
 			ZMath::barycentric(position, vertices[0].Position, vertices[1].Position, vertices[2].Position, u, v, w);
 
 			ZMath::float4 c[3];
@@ -485,27 +552,32 @@ namespace ZenLoad
 			c[2].fromABGR8(vertices[2].Color);
 
 			return u * c[0] + v * c[1] + w * c[2];*/
-                        
-                        return ZMath::float4(1,1,1,1); // TODO: Implementation missing without GLM
-		}
 
-		/**
+            return ZMath::float4( 1, 1, 1, 1 ); // TODO: Implementation missing without GLM
+        }
+
+        /**
 		* @brief Flags taken from the original ZEN-File
 		*/
-		PolyFlags flags;
+        PolyFlags flags;
 
-		/**
+        /**
 		 * @brief Index to the lightmap stored in the zCMesh
 		 */
-		int16_t lightmapIndex;
+        int16_t lightmapIndex;
 
-		/**
+        /**
 		* @brief Vertices belonging to this triangle
 		*/
-		WorldVertex vertices[3];
-	};
+        WorldVertex vertices[ 3 ];
 
-	/**
+        /**
+		* @brief Index of submesh correlated with this triangle
+		*/
+        int16_t submeshIndex;
+    };
+
+    /**
 	* @brief Simple generic packed mesh, containing all useful information of a (lod-level of) zCMesh and zCProgMeshProto
 	*/
 	// FIXME: Probably move this to renderer-package

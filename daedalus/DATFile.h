@@ -4,6 +4,8 @@
 #include <map>
 #include <zenload/zenParser.h>
 #include <utils/staticReferencedAllocator.h>
+#include <utils/logger.h>
+#include <daedalus/DaedalusStdlib.h>
 
 namespace Daedalus
 {
@@ -15,9 +17,15 @@ namespace Daedalus
 		IC_Info,
 		IC_Item,
 		IC_ItemReact,
-		IC_Focus
+		IC_Focus,
+		IC_Menu,
+        IC_MenuItem,
+		IC_Sfx,
+		IC_Pfx
 	};
 
+	template <class C_Class>
+	EInstanceClass enumFromClass();
 
 	enum EParFlag
     {
@@ -108,13 +116,21 @@ namespace Daedalus
     	EParOp_PushArrayVar    = 245   // EParOp_PushVar + EParOp_Array
     };
 
+	std::string eParTypeToString(EParType type);
+
     struct PARSymbol
     {
 		PARSymbol()
 		{
-			dataOffset = -1;
+			classMemberOffset = -1;
+			classMemberArraySize = 0;
 			instanceDataHandle.invalidate();
 			instanceDataClass = IC_Npc;
+			memset(&properties, 0, sizeof(properties));
+			/*classOffset = 0;
+            address = 0;
+            classMemberOffset = 0;*/
+            parent = 0xFFFFFFFF;
 		}
 
         std::string name;
@@ -162,82 +178,94 @@ namespace Daedalus
 
         } properties;
 
+		bool hasEParFlag(EParFlag eParFlag)
+		{
+			return static_cast<bool>(properties.elemProps.flags & eParFlag);
+		}
+
+		bool isEParType(EParType eParType)
+		{
+			return properties.elemProps.type == eParType;
+		}
+
         std::vector<float> floatData;
         std::vector<int32_t> intData;
         std::vector<std::string> strData;
         int32_t classOffset;
         uint32_t address;
 
-		int32_t dataOffset; // Not stored in files, only valid for classes to directly write to engine memory
+		// Defacto reflections. Offset of the class member to be able to access class members via name
+		int32_t classMemberOffset; // Not stored in files, only valid for classes to directly write to engine memory
+		// Store array size of the class member var. 1 for scalar members. Useful for bounds checking.
+		uint32_t classMemberArraySize; // Not stored in files, only valid for classes to directly write to engine memory
+
 		void* instanceData; // Not stored in files, only valid for classes to directly write to engine memory
 		ZMemory::BigHandle instanceDataHandle;
 		EInstanceClass instanceDataClass;
 
         uint32_t parent; // 0xFFFFFFFF (-1) = none
 
-		int32_t* getIntAddr(size_t idx = 0, void* baseAddr=nullptr)
-		{
-			if(baseAddr && dataOffset != -1)
-				return reinterpret_cast<int32_t*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(int32_t) * idx));
-
-			if(intData.size() <= idx) intData.resize(idx+1);
-			return &intData[idx];
+		void warnIndexOutOfBounds(size_t index, size_t size){
+			LogWarn() << "DaedalusVM: index out of range for: " << name << "[" << size << "], index = " << index;
 		}
 
-		std::string* getStrAddr(size_t idx = 0, void* baseAddr=nullptr)
+        template <class T>
+        T* getClassMember(void* baseAddr){
+            return reinterpret_cast<T*>(reinterpret_cast<char*>(baseAddr) + classMemberOffset);
+        }
+
+		int32_t& getInt(size_t idx = 0, void* baseAddr=nullptr);
+        std::string& getString(size_t idx = 0, void* baseAddr=nullptr);
+        float& getFloat(size_t idx = 0, void* baseAddr=nullptr);
+
+		template <typename T>
+		std::vector<T>& getDataContainer();
+
+		template <class T>
+		T& getValue(size_t idx = 0, void* baseAddr=nullptr)
 		{
-			if(baseAddr && dataOffset != -1)
-				return reinterpret_cast<std::string*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(std::string) * idx));
-
-			if(strData.size() <= idx) strData.resize(idx+1);
-			return &strData[idx];
-		}
-
-		int32_t getIntValue(size_t idx=0, void* baseAddr=nullptr)
-		{
-			if(baseAddr && dataOffset != -1)
-				return *reinterpret_cast<int32_t*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(int32_t) * idx));
-
-			if(intData.size() <= idx) intData.resize(idx+1);
-			return intData[idx];
+			bool isClassVar = this->hasEParFlag(EParFlag_ClassVar);
+			if (isClassVar)
+			{
+				bool isRegistered = classMemberOffset != -1;
+				if (!isRegistered)
+				{
+					LogError() << "DaedalusVM: class data member not registered: " << name;
+				} else if (baseAddr == nullptr)
+				{
+					LogError() << "DaedalusVM: base address of C_Class is nullptr: " << name;
+				} else if (idx >= classMemberArraySize){
+					warnIndexOutOfBounds(idx, classMemberArraySize);
+					LogError() << "DaedalusVM: index out of range for registered class data member: " << name;
+				} else {
+					return getClassMember<T>(baseAddr)[idx];
+				}
+				//assert(false);
+			}
+			std::vector<T>& data = getDataContainer<T>();
+			// read from symbol's data if not isClassVar or the above failed. (the latter should not happen)
+			if(data.size() <= idx)
+			{
+				if (!isClassVar) // only print error message if we did not fall through from above
+					warnIndexOutOfBounds(idx, data.size());
+				data.resize(idx+1);
+			}
+			return data[idx];
 		}
 
 		void set(int32_t v, size_t idx = 0, void* baseAddr=nullptr)
 		{
 			switch(properties.elemProps.type)
 			{
-				case EParType_Int:
-					if(intData.size() <= idx) intData.resize(idx+1);
-					intData[idx] = v;
-
-					if(baseAddr && dataOffset != -1)
-						*reinterpret_cast<int32_t*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(int32_t) * idx)) = v;
-					break;
-
-				case EParType_Float:
-					if(floatData.size() <= idx) floatData.resize(idx+1);
-					floatData[idx] = *reinterpret_cast<float*>(&v);
-
-					if(baseAddr && dataOffset != -1)
-						*reinterpret_cast<float*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(float) * idx)) = *reinterpret_cast<float*>(&v);
-					break;
-
 				case EParType_Func:
 					address = v;
 
-					if(baseAddr && dataOffset != -1)
-						*reinterpret_cast<int32_t*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(int32_t) * idx)) = v;
+					if(baseAddr && classMemberOffset != -1)
+						*reinterpret_cast<int32_t*>(reinterpret_cast<char*>(baseAddr) + classMemberOffset + (sizeof(int32_t) * idx)) = v;
 					break;
-			}
-		}
-
-		void set(const std::string& v, size_t idx=0, void* baseAddr=nullptr)
-		{
-			if(strData.size() <= idx) strData.resize(idx+1);
-			strData[idx] = v;
-
-			if(baseAddr && dataOffset != -1)
-				*reinterpret_cast<std::string*>(reinterpret_cast<char*>(baseAddr) + dataOffset + (sizeof(float) * idx)) = v;
+                default:
+                    assert(false);
+            }
 		}
 
 		bool isDataSame(const PARSymbol& other) const
@@ -250,8 +278,8 @@ namespace Daedalus
     {
         std::vector<uint32_t> sortTable;
         std::vector<PARSymbol> symbols;
-		std::unordered_map<std::string, size_t> symbolsByName;
-
+        std::unordered_map<std::string, size_t> symbolsByName;
+        std::unordered_map<size_t, size_t> functionsByAddress;
     };
 
     struct PARStack
@@ -301,6 +329,10 @@ namespace Daedalus
 		PARSymbol& getSymbolByIndex(size_t idx);
 
 		/**
+		 * @return Function symbol index that points to the given address. returns -1 if address was not found
+		 */
+		size_t getFunctionIndexByAddress(size_t address);
+		/**
 		 * Goes through all symbols and calls the given callback for every instance of the specified class
 		 */
 		void iterateSymbolsOfClass(const std::string& className, std::function<void(size_t, PARSymbol&)> callback);
@@ -318,6 +350,49 @@ namespace Daedalus
 
 		const PARSymTable& getSymTable(){return m_SymTable;}
 		const PARStack& getStack(){return m_Stack;}
+
+        // TODO move into Utils
+        /**
+         * this overload targets non-arrays. scalars have a length of 1
+         * @param scalar
+         * @return
+         */
+        template <class T>
+        static constexpr std::size_t arraySize(const T& scalar)
+        {
+            return 1;
+        }
+
+        // TODO move into Utils
+        /**
+         * determines the number of elements of a c-array at compiletime.
+         * @param array
+         * @return
+         */
+        template<class T, size_t N>
+        static constexpr std::size_t arraySize(const T (&array)[N])
+        {
+            return N;
+        }
+
+        /**
+         * Calculates and registers the offset and array-size of the given class-data-member
+         * @tparam C_Class
+         * @tparam MemberClass
+         * @param symbolName full symbol name consisting of classname.membervarname
+         * @param obj object of class C_Class
+         * @param member this variable reference must be a member of the given obj
+         */
+        template<class C_Class, class MemberClass>
+        void registerMember(const std::string& symbolName, const C_Class& obj, const MemberClass& member, bool checkIfExists = false){
+			if (checkIfExists && !hasSymbolName(symbolName))
+                return;
+            auto& parSymbol = getSymbolByName(symbolName);
+			int32_t offset = static_cast<int32_t>(((char*)&member) - ((char*)&obj));
+            parSymbol.classMemberOffset = offset;
+            parSymbol.classMemberArraySize = static_cast<uint32_t>(arraySize(member));
+        }
+
     private:
         void readSymTable();
 		void readStack();

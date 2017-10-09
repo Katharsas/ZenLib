@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstring>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -147,6 +148,11 @@ namespace ZenLoad
 		void skipSpaces();
 
 		/**
+		 * @brief Skips all newline-characters until it hits a non-newline one
+		 */
+		void skipNewLines();
+
+		/**
 		 * @brief Throws an exception if the current seek is behind the file-size
 		 */
 		void checkArraySize();
@@ -199,9 +205,12 @@ namespace ZenLoad
 		template<typename T>
 		void readStructure(T& s) 
 		{
-			void* _s = (void*)&s;
-			memcpy(_s, &m_Data[m_Seek], sizeof(T));
-			m_Seek += sizeof(T);
+            if (m_Seek + sizeof(T) <= m_Data.size())
+            {
+                void* _s = (void*)&s;
+                memcpy(_s, &m_Data[m_Seek], sizeof(T));
+                m_Seek += sizeof(T);
+            }
 		}
 
 		/**

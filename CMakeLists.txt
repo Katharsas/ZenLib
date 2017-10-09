@@ -16,10 +16,12 @@ endif()
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(lib/double-conversion)
 add_subdirectory(lib/libsquish)
+add_subdirectory(lib/physfs)
 
 include_directories(lib/double-conversion/double-conversion)
 include_directories(lib/glm/glm)
 include_directories(lib/libsquish)
+include_directories(lib/physfs/src)
 include_directories(.)
 
 # Internal libraries

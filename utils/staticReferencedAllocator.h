@@ -45,6 +45,11 @@ namespace ZMemory
         {
             return index < r.index;
         }
+
+        bool operator == (const GenericHandle<N1,N2>& r) const
+        {
+            return index == r.index && generation == r.generation;
+        }
     };
 
     /**
@@ -80,7 +85,8 @@ namespace ZMemory
     class StaticReferencedAllocator
     {
     public:
-        typedef GenericHandle<numberOfBits(NUM), std::min(32u, GENERIC_HANDLE_MAX_SIZE_BITS - numberOfBits(NUM))> Handle;
+        //typedef GenericHandle<numberOfBits(NUM), std::min(32u, GENERIC_HANDLE_MAX_SIZE_BITS - numberOfBits(NUM))> Handle;
+        typedef GenericHandle<numberOfBits(NUM), 32u> Handle;
 
         /**
          * Outside-Mirror for the type this can create
@@ -162,7 +168,7 @@ namespace ZMemory
                 m_OnRemoved(m_Elements[actIdx]);
 
             // Overwrite this element with the last one
-            memcpy(&m_Elements[actIdx], &m_Elements[m_LastInternalHandle->m_Handle.index], sizeof(T));
+            m_Elements[actIdx] = m_Elements[m_LastInternalHandle->m_Handle.index];
 
             // Fix the handle of the last element
             m_LastInternalHandle->m_Handle.index = actIdx;

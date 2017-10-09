@@ -17,6 +17,10 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+// HACK: Work around windows.h messing this up with its define
+#ifdef DialogBox
+#undef DialogBox
+#endif
 #endif
 
 #if defined(__ANDROID__)
@@ -133,10 +137,10 @@ namespace Utils
 
 			for(const T& s : obj)
 			{
-				m_Message << "\n - " << s;
+				m_Message << " - " << s << '\n';
 			}
 
-			m_Message << "\n]";
+			m_Message << ']';
 			return *this;
 		}
 
@@ -153,10 +157,10 @@ namespace Utils
 
 			for(const T& s : obj)
 			{
-				m_Message << "\n - " << s;
+				m_Message << " - " << s << '\n';
 			}
 
-			m_Message << "\n]";
+			m_Message << ']';
 			return *this;
 		}
 

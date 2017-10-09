@@ -36,15 +36,8 @@ void DaedalusGameState::registerExternals()
             m_GameExternals.wld_insertitem(item);
     });
 
-    m_VM.registerExternalFunction("wld_insertnpc", [=](Daedalus::DaedalusVM& vm){
-        std::string spawnpoint = vm.popString(); if(l) LogInfo() << "spawnpoint: " << spawnpoint;
-        uint32_t npcinstance = vm.popDataValue(); if(l) LogInfo() << "npcinstance: " << npcinstance;
-
-        insertNPC(npcinstance, spawnpoint);
-    });
-
     m_VM.registerExternalFunction("createinvitem", [=](Daedalus::DaedalusVM& vm){
-        int32_t itemInstance = vm.popDataValue(); if(l) LogInfo() << "itemInstance: " << itemInstance;
+        uint32_t itemInstance = (uint32_t)vm.popDataValue(); if(l) LogInfo() << "itemInstance: " << itemInstance;
         uint32_t arr_n0;
         int32_t npc = vm.popVar(arr_n0);
 
@@ -58,17 +51,14 @@ void DaedalusGameState::registerExternals()
     });
 
     m_VM.registerExternalFunction("createinvitems", [=](Daedalus::DaedalusVM& vm){
-        int32_t num = vm.popDataValue();
-        int32_t itemInstance = vm.popDataValue(); if(l) LogInfo() << "itemInstance: " << itemInstance;
+        uint32_t num = (uint32_t)vm.popDataValue();
+        uint32_t itemInstance = (uint32_t)vm.popDataValue(); if(l) LogInfo() << "itemInstance: " << itemInstance;
         uint32_t arr_n0;
         int32_t npc = vm.popVar(arr_n0);
 
         NpcHandle hnpc = ZMemory::handleCast<NpcHandle>(m_VM.getDATFile().getSymbolByIndex(npc).instanceDataHandle);
 
-        for(int32_t i=0;i<num;i++)
-        {
-            ItemHandle h = createInventoryItem(itemInstance, hnpc);
-        }
+        createInventoryItem(itemInstance, hnpc, num);
 
         //LogInfo() << "1: " << item.name;
         //LogInfo() << "2. " << npcData.name[0];
@@ -78,19 +68,16 @@ void DaedalusGameState::registerExternals()
     m_VM.registerExternalFunction("hlp_getnpc", [=](Daedalus::DaedalusVM& vm){
         int32_t instancename = vm.popDataValue(); if(l) LogInfo() << "instancename: " << instancename;
 
-        if(!vm.getDATFile().getSymbolByIndex(instancename).instanceDataHandle.isValid())
+        /*if(!vm.getDATFile().getSymbolByIndex(instancename).instanceDataHandle.isValid())
         {
-            NpcHandle h = createNPC();
-            GEngineClasses::C_Npc& npc = getNpc(h);
-            vm.initializeInstance(ZMemory::toBigHandle(h), static_cast<size_t>(instancename), IC_Npc);
+			
         }else
         {
             GEngineClasses::C_Npc& npcData = getNpc(ZMemory::handleCast<NpcHandle>(vm.getDATFile().getSymbolByIndex(instancename).instanceDataHandle));
             if(l) LogInfo() << " [HLP_GETNPC] Name: "
                   << npcData.name[0];
-        }
+        }*/
 
-        // TODO: PB returns the actual address to the npc here. But why?
         vm.setReturnVar(instancename);
     });
 
@@ -113,41 +100,6 @@ void DaedalusGameState::registerExternals()
         else
             vm.setReturn(0);
     });
-
-    m_VM.registerExternalFunction("log_createtopic", [=](Daedalus::DaedalusVM& vm){
-        int32_t section = vm.popDataValue();
-        std::string name = vm.popString();
-        m_PlayerLog[name].section = static_cast<LogTopic::ESection>(section);
-        m_PlayerLog[name].topic = name;
-
-        if(m_GameExternals.log_createtopic)
-            m_GameExternals.log_createtopic(name);
-    });
-
-    m_VM.registerExternalFunction("log_settopicstatus", [=](Daedalus::DaedalusVM& vm){
-        int32_t status = vm.popDataValue();
-        std::string name = vm.popString();
-
-        m_PlayerLog[name].status = static_cast<LogTopic::ELogStatus>(status);
-
-        if(m_GameExternals.log_settopicstatus)
-            m_GameExternals.log_settopicstatus(name);
-    });
-
-    m_VM.registerExternalFunction("log_addentry", [=](Daedalus::DaedalusVM& vm){
-        std::string entry = vm.popString();
-        std::string topic = vm.popString();
-
-        LogInfo() << "";
-        LogInfo() << " ########### New Log Entry: " << topic << " ########### ";
-        LogInfo() << entry;
-        LogInfo() << "";
-
-        m_PlayerLog[topic].entries.push_back(entry);
-
-        if(m_GameExternals.log_addentry)
-            m_GameExternals.log_addentry(topic, entry);
-    });
 }
 
 
@@ -158,10 +110,10 @@ Daedalus::GEngineClasses::Instance* DaedalusGameState::getByClass(ZMemory::BigHa
 
     switch(instClass)
     {
-        case EInstanceClass::IC_Npc:
+        case IC_Npc:
             return &getNpc(ZMemory::handleCast<NpcHandle>(h));
 
-        case EInstanceClass::IC_Item:
+        case IC_Item:
             return &getItem(ZMemory::handleCast<ItemHandle>(h));
 
         case IC_Mission:
@@ -176,57 +128,91 @@ Daedalus::GEngineClasses::Instance* DaedalusGameState::getByClass(ZMemory::BigHa
         case IC_Focus:
             return &getFocus(ZMemory::handleCast<FocusHandle>(h));
 
+        case IC_Menu:
+            return &getMenu(ZMemory::handleCast<MenuHandle>(h));
+
+        case IC_MenuItem:
+            return &getMenuItem(ZMemory::handleCast<MenuItemHandle>(h));
+
+        case IC_Sfx:
+            return &getSfx(ZMemory::handleCast<SfxHandle>(h));
+
+        case IC_Pfx:
+            return &getPfx(ZMemory::handleCast<PfxHandle>(h));
+
         default:
             return nullptr;
 
     }
 }
 
+
+template <typename C_Class>
+CHandle<C_Class> DaedalusGameState::create()
+{
+    CHandle<C_Class> h = m_RegisteredObjects.get<C_Class>().createObject();
+    // important! overwrite uninitialized memory with initialized C_Class
+    get<C_Class>(h) = C_Class();
+
+    if(m_OnInstanceCreated)
+        m_OnInstanceCreated(ZMemory::toBigHandle(h), enumFromClass<C_Class>());
+
+    return h;
+}
+
 NpcHandle DaedalusGameState::createNPC()
 {
-    NpcHandle h = m_RegisteredObjects.NPCs.createObject();
-    getNpc(h).userPtr = nullptr;
-    return h;
+    return create<GEngineClasses::C_Npc>();
 }
 
 ItemHandle DaedalusGameState::createItem()
 {
-    auto h = m_RegisteredObjects.items.createObject();
-
-    getItem(h).userPtr = nullptr;
-
-    return h;
+    return create<GEngineClasses::C_Item>();
 }
 
 ItemReactHandle DaedalusGameState::createItemReact()
 {
-    auto h = m_RegisteredObjects.itemReacts.createObject();
-    getItemReact(h).userPtr = nullptr;
-    return h;
+    return create<GEngineClasses::C_ItemReact>();
 }
 
 MissionHandle DaedalusGameState::createMission()
 {
-    auto h = m_RegisteredObjects.missions.createObject();
-    getMission(h).userPtr = nullptr;
-    return h;
+    return create<GEngineClasses::C_Mission>();
 }
 
 InfoHandle DaedalusGameState::createInfo()
 {
-    auto h = m_RegisteredObjects.infos.createObject();
-    getInfo(h).userPtr = nullptr;
-    return h;
+    return create<GEngineClasses::C_Info>();
 }
 
 FocusHandle DaedalusGameState::createFocus()
 {
-    auto h = m_RegisteredObjects.focuses.createObject();
-    getFocus(h).userPtr = nullptr;
-    return h;
+    return create<GEngineClasses::C_Focus>();
 }
 
-ItemHandle DaedalusGameState::createInventoryItem(size_t itemSymbol, NpcHandle npc)
+SfxHandle DaedalusGameState::createSfx()
+{
+    return create<GEngineClasses::C_SFX>();
+}
+
+PfxHandle DaedalusGameState::createPfx()
+{
+    return create<GEngineClasses::C_ParticleFX>();
+}
+
+FocusHandle DaedalusGameState::createMenu()
+{
+    return create<GEngineClasses::C_Menu>();
+}
+
+FocusHandle DaedalusGameState::createMenuItem()
+{
+    return create<GEngineClasses::C_Menu_Item>();
+}
+
+
+
+ItemHandle DaedalusGameState::createInventoryItem(size_t itemSymbol, NpcHandle npc, unsigned int count)
 {
     auto items = m_NpcInventories[npc];
 
@@ -238,15 +224,19 @@ ItemHandle DaedalusGameState::createInventoryItem(size_t itemSymbol, NpcHandle n
         // Just add to the count here
         if(item.instanceSymbol == itemSymbol)
         {
-            item.count[0]++;
+            item.amount += count;
             return h;
         }
     }
 
+    static int s_Tmp = 0;
+    s_Tmp++;
+
     // Get memory for the item
     ItemHandle h = createItem();
     GEngineClasses::C_Item& item = getItem(h);
-    item.count[0] = 1;
+
+    item.amount = count;
 
     // Run the script-constructor
     m_VM.initializeInstance(ZMemory::toBigHandle(h), static_cast<size_t>(itemSymbol), IC_Item);
@@ -269,9 +259,7 @@ ItemHandle DaedalusGameState::addItemToInventory(ItemHandle item, NpcHandle npc)
         // Just add to the count here
         if(i.instanceSymbol == getItem(item).instanceSymbol)
         {
-            i.count[0]++;
-
-            m_RegisteredObjects.items.removeObject(item);
+            i.amount++;
             return h;
         }
     }
@@ -280,20 +268,29 @@ ItemHandle DaedalusGameState::addItemToInventory(ItemHandle item, NpcHandle npc)
 
     if (m_GameExternals.createinvitem)
         m_GameExternals.createinvitem(item, npc);
+
+    return item;
 }
 
 
-bool DaedalusGameState::removeInventoryItem(size_t itemSymbol, NpcHandle npc)
+bool DaedalusGameState::removeInventoryItem(size_t itemSymbol, NpcHandle npc, unsigned int count)
 {
     for(auto it = m_NpcInventories[npc].begin(); it != m_NpcInventories[npc].end(); it++)
     {
         Daedalus::GEngineClasses::C_Item& item = getItem((*it));
+
+
         if(item.instanceSymbol == itemSymbol)
         {
-            m_NpcInventories[npc].erase(it);
+            item.amount -= std::min(item.amount, count); // Handle overflow;
 
-            // Clear memory
-            m_RegisteredObjects.items.removeObject(*it);
+            // Remove if count reached 0
+            if(item.amount == 0)
+            {
+                removeItem(*it);
+
+                m_NpcInventories[npc].erase(it);
+            }
 
             return true;
         }
@@ -351,3 +348,53 @@ ItemHandle DaedalusGameState::insertItem(const std::string &instance)
     return insertItem(m_VM.getDATFile().getSymbolIndexByName(instance));
 }
 
+SfxHandle DaedalusGameState::insertSFX(size_t instance)
+{
+    // Get memory for the item
+    SfxHandle h = createSfx();
+    GEngineClasses::C_SFX& sfx = getSfx(h);
+
+    // Run the script-constructor
+    m_VM.initializeInstance(ZMemory::toBigHandle(h), static_cast<size_t>(instance), IC_Sfx);
+
+    return h;
+}
+
+SfxHandle DaedalusGameState::insertSFX(const std::string &instance)
+{
+    return insertSFX(m_VM.getDATFile().getSymbolIndexByName(instance));
+}
+
+void DaedalusGameState::removeItem(ItemHandle item)
+{
+    if(m_OnInstanceRemoved)
+        m_OnInstanceRemoved(ZMemory::toBigHandle(item), IC_Item);
+
+    m_RegisteredObjects.items.removeObject(item);
+}
+
+void DaedalusGameState::removeMenu(MenuHandle menu)
+{
+    if(m_OnInstanceRemoved)
+        m_OnInstanceRemoved(ZMemory::toBigHandle(menu), IC_Menu);
+
+    m_RegisteredObjects.menus.removeObject(menu);
+}
+
+void DaedalusGameState::removeMenuItem(MenuItemHandle menuItem)
+{
+    if(m_OnInstanceRemoved)
+        m_OnInstanceRemoved(ZMemory::toBigHandle(menuItem), IC_MenuItem);
+
+    m_RegisteredObjects.menuItems.removeObject(menuItem);
+}
+
+void DaedalusGameState::removeNPC(NpcHandle npc) {
+    if(m_GameExternals.wld_removenpc)
+        m_GameExternals.wld_removenpc(npc);
+
+    if(m_OnInstanceRemoved)
+        m_OnInstanceRemoved(ZMemory::toBigHandle(npc), IC_Npc);
+
+    m_RegisteredObjects.NPCs.removeObject(npc);
+}

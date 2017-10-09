@@ -8,67 +8,14 @@ using namespace Daedalus;
 using namespace GameState;
 using namespace ZenLoad;
 
-DaedalusDialogManager::DaedalusDialogManager(Daedalus::DaedalusVM& vm,const std::string& ou_bin)
+DaedalusDialogManager::DaedalusDialogManager(Daedalus::DaedalusVM& vm,
+                                             const std::string& ou_bin,
+                                             std::map<size_t, std::set<size_t>>& knownInfos)
     : m_VM(vm),
-      m_MessageLib(ou_bin)
+      m_MessageLib(ou_bin),
+      m_KnownNpcInfoSymbolsByNpcSymbols(knownInfos)
 {
     gatherNpcInformation();
-}
-
-void DaedalusDialogManager::registerExternals(
-        std::function<void(NpcHandle, NpcHandle, const ZenLoad::oCMsgConversationData&)> onAIOutput,
-        std::function<void(NpcHandle, std::vector<InfoHandle>)> onStartConversation)
-{
-    m_OnAIOutput = onAIOutput;
-	m_OnStartConversation = onStartConversation;
-	
-
-    m_VM.registerExternalFunction("ai_output", [&](Daedalus::DaedalusVM& vm){
-        std::string outputname = vm.popString();
-        uint32_t target = vm.popVar();
-        uint32_t self = vm.popVar();
-
-        auto& message = m_MessageLib.getMessageByName(outputname);
-
-        NpcHandle hself = ZMemory::handleCast<NpcHandle>(m_VM.getDATFile().getSymbolByIndex(self).instanceDataHandle);
-        NpcHandle htarget = ZMemory::handleCast<NpcHandle>(m_VM.getDATFile().getSymbolByIndex(target).instanceDataHandle);
-
-        // Notify user
-        m_OnAIOutput(hself, htarget, message);
-    });
-
-    m_VM.registerExternalFunction("AI_ProcessInfos", [&](Daedalus::DaedalusVM& vm){
-        uint32_t self = vm.popVar();
-
-        NpcHandle hself = ZMemory::handleCast<NpcHandle>(m_VM.getDATFile().getSymbolByIndex(self).instanceDataHandle);
-        Daedalus::GEngineClasses::C_Npc& npc = m_VM.getGameState().getNpc(hself);
-
-		auto& info = m_NpcInfosByNpcSymbols[npc.instanceSymbol];
-
-        // Notify user
-		m_OnStartConversation(hself, info);
-    });
-
-    m_VM.registerExternalFunction("InfoManager_HasFinished", [](Daedalus::DaedalusVM& vm){
-
-        // TODO: Implement this
-        vm.setReturn(1);
-    });
-
-    m_VM.registerExternalFunction("npc_knowsinfo", [&](Daedalus::DaedalusVM& vm){
-        int32_t infoinstance = vm.popDataValue();
-        int32_t self = vm.popVar();
-
-        NpcHandle hself = ZMemory::handleCast<NpcHandle>(m_VM.getDATFile().getSymbolByIndex(self).instanceDataHandle);
-        Daedalus::GEngineClasses::C_Npc& npc = m_VM.getGameState().getNpc(hself);
-
-        auto& l = m_KnownNpcInfoSymbolsByNpcSymbols[npc.instanceSymbol];
-        int32_t knows = l.find(infoinstance) != l.end() ? 1 : 0;
-
-        //LogInfo() << "Does he kow? (" << vm.getDATFile().getSymbolByIndex(npc.instanceSymbol).name << " -> " << vm.getDATFile().getSymbolByIndex(infoinstance).name << "): " << knows;
-
-        vm.setReturn(knows);
-    });
 }
 
 void DaedalusDialogManager::gatherNpcInformation()
@@ -80,15 +27,9 @@ void DaedalusDialogManager::gatherNpcInformation()
         Daedalus::GEngineClasses::C_Info& info = m_VM.getGameState().getInfo(h);
         m_VM.initializeInstance(ZMemory::toBigHandle(h), i, Daedalus::IC_Info);
 
-        // Add to map
-        m_NpcInfosByNpcSymbols[info.npc].push_back(h);
+        // Add to vector
+        m_NpcInfos.push_back(h);
     });
-
-    // Messages are in wrong order. Fix this.
-    for(auto& v : m_NpcInfosByNpcSymbols)
-    {
-        std::reverse(v.second.begin(),v.second.end());
-    }
 }
 
 void DaedalusDialogManager::setNpcInfoKnown(size_t npcInstance, size_t infoInstance)
@@ -97,13 +38,23 @@ void DaedalusDialogManager::setNpcInfoKnown(size_t npcInstance, size_t infoInsta
     m_KnownNpcInfoSymbolsByNpcSymbols[npcInstance].insert(infoInstance);
 }
 
-void DaedalusDialogManager::processInfosFor(NpcHandle hnpc)
+std::vector<InfoHandle> DaedalusDialogManager::getInfos(NpcHandle hnpc)
 {
     Daedalus::GEngineClasses::C_Npc& npc = m_VM.getGameState().getNpc(hnpc);
-    auto& info = m_NpcInfosByNpcSymbols[npc.instanceSymbol];
+    std::vector<InfoHandle> result;
+    for (auto& infoHandle : m_NpcInfos){
+        Daedalus::GEngineClasses::C_Info& info = m_VM.getGameState().getInfo(infoHandle);
+        if (info.npc == npc.instanceSymbol) {
+            result.push_back(infoHandle);
+        }
+    }
+    return result;
+}
 
-    // Notify user
-    m_OnStartConversation(hnpc, info);
+bool DaedalusDialogManager::doesNpcKnowInfo(size_t npcInstance, size_t infoInstance)
+{
+    const auto& m = m_KnownNpcInfoSymbolsByNpcSymbols[npcInstance];
+    return m.find(infoInstance) != m.end();
 }
 
 

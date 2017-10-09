@@ -52,6 +52,7 @@ namespace ZenLoad
 		static void readObjectData(zCVobData& info, ZenParser& parser, WorldVersion version, const ZenParser::ChunkHeader& header)
 		{
 			info.objectClass = "zCVob";
+            info.vobType = zCVobData::VT_zCVob;
 
 			info.rotationMatrix = ZMath::Matrix::CreateIdentity();
 
@@ -163,7 +164,8 @@ namespace ZenLoad
 										 Prop("cdStatic", info.cdStatic),
 										 Prop("cdDyn", info.cdDyn),
 										 Prop("staticVob", info.staticVob),
-										 Prop("dynShadow", info.dynamicShadow)); // TODO: References!
+                                         Prop("dynShadow", info.dynamicShadow),
+                                         Prop("visualAniMode", info.visualAniMode)); // TODO: References!
 				}
 
 				// Skip visual-chunk
@@ -189,11 +191,14 @@ namespace ZenLoad
 			// Check subclasses
 			if(header.classname == "oCItem:zCVob")
 			{
+                info.vobType = zCVobData::VT_oCItem;
 				parser.getImpl()->readEntry("itemInstance", &info.oCItem.instanceName);
 			}
 
 			if(header.classname.find("oCMOB:") != std::string::npos)
 			{
+                info.vobType = zCVobData::VT_oCMOB;
+
 				parser.getImpl()->readEntry("focusName", &info.oCMOB.focusName);
 				parser.getImpl()->readEntry("hitpoints", &info.oCMOB.hitpoints);
 				parser.getImpl()->readEntry("damage", &info.oCMOB.damage);
@@ -209,6 +214,8 @@ namespace ZenLoad
 
 			if(header.classname.find("oCMobInter:") != std::string::npos)
 			{
+                info.vobType = zCVobData::VT_oCMobInter;
+
 				/*if(version == WorldVersion::VERSION_G1_08k)
 				{
 					int32_t tmp;
@@ -222,6 +229,40 @@ namespace ZenLoad
 				parser.getImpl()->readEntry("conditionFunc", &info.oCMobInter.conditionFunc);
 				parser.getImpl()->readEntry("onStateFunc", &info.oCMobInter.onStateFunc);
 				parser.getImpl()->readEntry("rewind", &info.oCMobInter.rewind);
+
+				if(header.classname.find("oCMobContainer:") != std::string::npos)
+				{
+                    parser.getImpl()->readEntry("locked", &info.oCMobContainer.locked);
+					parser.getImpl()->readEntry("keyInstance", &info.oCMobContainer.keyInstance);
+					parser.getImpl()->readEntry("pickLockStr", &info.oCMobContainer.pickLockStr);
+					parser.getImpl()->readEntry("contains", &info.oCMobContainer.contains);
+				}
+			}else if(header.classname.find("zCVobLight:") != std::string::npos)
+			{
+                info.vobType = zCVobData::VT_zCVobLight;
+
+				parser.getImpl()->readEntry("lightPresetInUse", &info.zCVobLight.lightPresetInUse);
+				parser.getImpl()->readEntry("lightType", &info.zCVobLight.lightType);
+				parser.getImpl()->readEntry("range", &info.zCVobLight.range);
+				parser.getImpl()->readEntry("color", &info.zCVobLight.color);
+				parser.getImpl()->readEntry("spotConeAngle", &info.zCVobLight.spotConeAngle);
+				parser.getImpl()->readEntry("lightStatic", &info.zCVobLight.lightStatic);
+				parser.getImpl()->readEntry("lightQuality", &info.zCVobLight.lightQuality);
+				parser.getImpl()->readEntry("lensflareFX", &info.zCVobLight.lensflareFX);
+
+			}else if(header.classname.find("zCVobSound:") != std::string::npos)
+			{
+				parser.getImpl()->readEntry("sndVolume", &info.zCVobSound.sndVolume);
+				parser.getImpl()->readEntry("sndMode", (uint32_t*)&info.zCVobSound.sndType);
+				parser.getImpl()->readEntry("sndRandDelay", &info.zCVobSound.sndRandDelay);
+				parser.getImpl()->readEntry("sndRandDelayVar", &info.zCVobSound.sndRandDelayVar);
+				parser.getImpl()->readEntry("sndStartOn", &info.zCVobSound.sndStartOn);
+				parser.getImpl()->readEntry("sndAmbient3D", &info.zCVobSound.sndAmbient3D);
+				parser.getImpl()->readEntry("sndObstruction", &info.zCVobSound.sndObstruction);
+				parser.getImpl()->readEntry("sndConeAngle", &info.zCVobSound.sndConeAngle);
+				parser.getImpl()->readEntry("sndVolType", (uint32_t*)&info.zCVobSound.sndVolType);
+				parser.getImpl()->readEntry("sndRadius", &info.zCVobSound.sndRadius);
+				parser.getImpl()->readEntry("sndName", &info.zCVobSound.sndName);
 			}
 
 			parser.skipChunk();
