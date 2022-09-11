@@ -1,12 +1,14 @@
 #include "zCMesh.h"
 #include <map>
 #include <string>
+#include <array>
 #include "zCMaterial.h"
 #include "zTypes.h"
 #include "zenParser.h"
 #include "utils/logger.h"
 #include "vdfs/fileIndex.h"
 #include <utils/alignment.h>
+#include "ztex.h"
 
 namespace ZenLib
 {
@@ -246,12 +248,76 @@ namespace ZenLib
                 break;
 
                 case MSID_LIGHTMAPLIST:
+                {
+                    uint32_t lightmapAndTexCount = parser.readBinaryDWord();
+                    for (uint32_t i = 0; i < lightmapAndTexCount; ++i)
+                    {
+                        // TODO this is like MSID_LIGHTMAPLIST_SHARED but we always have 1 lightmap reference directly followed by
+                        // a corresponding single texture, without indices / texture reuse
+                    }
+
                     parser.setSeek(chunkEnd);  // Skip chunk
-                    break;
+                }
+                break;
 
                 case MSID_LIGHTMAPLIST_SHARED:
+                {
+                    // TODO only lightmaps without MipMaps and R5G6B5 are implemented currently, others will be skipped
+                    bool onlySupportedFormats = true;
+                    uint32_t texCount = parser.readBinaryDWord();
+                    m_LightmapTextures.reserve(texCount);
+                    
+                    for (uint32_t i = 0; i < texCount; ++i) {
+
+                        ZTEX_FILE_HEADER texHeader;
+                        parser.readStructure(texHeader);
+
+                        // texHeader.Signature must be ZTEX
+                        // texHeader.Version must be 0
+                        //char* sigBytes = static_cast<char*>(static_cast<void*>(&texHeader.Signature));
+                        //auto signature = std::string(sigBytes, 4);
+
+                        uint32_t pixels = texHeader.TexInfo.Width * texHeader.TexInfo.Height;
+                        if (texHeader.TexInfo.Format == 8 && texHeader.TexInfo.MipMaps == 1)
+                        {
+                            // 16 bit color (R5G6B5)
+                            uint32_t size = pixels * 2;
+                            std::vector<uint8_t> texture;
+
+                            // copy both header and pixel data into byte array
+                            texture.resize(sizeof(texHeader) + size);
+                            memcpy(texture.data(), (const unsigned char*)&texHeader, sizeof(texHeader));
+                            parser.readBinaryRaw(texture.data() + sizeof(texHeader), size);
+
+                            m_LightmapTextures.push_back(texture);
+                        }
+                        else
+                        {
+                            onlySupportedFormats = false;
+                            break;
+                        }
+                    }
+
+                    if (onlySupportedFormats)
+                    {
+                        uint32_t lightmapCount = parser.readBinaryDWord();
+                        m_LightmapReferences.reserve(lightmapCount);
+
+                        for (uint32_t i = 0; i < lightmapCount; ++i)
+                        {
+                            Lightmap lightmap;
+                            parser.readStructure(lightmap.origin);
+                            parser.readStructure(lightmap.normalUp);
+                            parser.readStructure(lightmap.normalRight);
+                            lightmap.lightmapTextureIndex = parser.readBinaryDWord();
+
+                            m_LightmapReferences.push_back(lightmap);
+                        }
+                    }
+
                     parser.setSeek(chunkEnd);  // Skip chunk
-                    break;
+                }
+                break;
 
                 case MSID_VERTLIST:
                 {

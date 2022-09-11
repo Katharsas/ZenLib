@@ -75,6 +75,13 @@ namespace ZenLib
             const std::vector<zCMaterialData>& getMaterials() const { return m_Materials; }
 
             /**
+             * @brief Lightmap textures, each as raw bytes of full zTex including header. Can be converted as is to DDS with ztex2dds.h
+             */
+            const std::vector<std::vector<uint8_t>>& getLightmapTextures() const { return m_LightmapTextures; }
+
+            const std::vector<Lightmap>& getLightmapReferences() const { return m_LightmapReferences; }
+
+            /**
 		 * @brief getter for the boudingboxes
 		 */
             void getBoundingBox(ZMath::float3& min, ZMath::float3& max)
@@ -135,6 +142,13 @@ namespace ZenLib
 		 */
             ZMath::float3 m_BBMin;
             ZMath::float3 m_BBMax;
+
+            /**
+             * @brief Lightmap textures, each as raw bytes of full zTex including header. Can be converted as is to DDS with ztex2dds.h
+             */
+            std::vector<std::vector<uint8_t>> m_LightmapTextures;
+
+            std::vector<Lightmap> m_LightmapReferences;
         };
     }  // namespace ZenLoad
 }  // namespace ZenLib

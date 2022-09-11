@@ -743,5 +743,17 @@ namespace ZenLib
             zMDL_EVENT_MM_STARTANI,
             zMDL_EVENT_CAM_TREMOR,
         };
+
+        
+
+        struct Lightmap
+        {
+            // Lightmap texture used for this triangle
+            uint32_t lightmapTextureIndex;
+            // Origin and normals that allow to calculate correct UVs for each vertex of this triangle
+            ZMath::float3 origin;
+            ZMath::float3 normalUp;
+            ZMath::float3 normalRight;
+        };
     }  // namespace ZenLoad
 }  // namespace ZenLib
