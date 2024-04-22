@@ -200,12 +200,24 @@ namespace ZenLib
                             };
 
                             loadRec(true);
+
+                            assert(numLeafs == info.leafIndices.size());
                         }
                         break;
 
                         case CHUNK_BSP_LEAF_LIGHT:
+                        {
+                            uint32_t numLeafs = info.leafIndices.size();
+                            ZMath::float3 lightPos = {0, 0, 0};
+                            for (uint32_t i = 0; i < numLeafs; i++)
+                            {
+                                parser.readStructure(lightPos);
+                                info.leafLightPositions.push_back(lightPos);
+                            }
+
                             parser.setSeek(chunkEnd);  // Skip chunk
-                            break;
+                        }
+                        break;
 
                         case CHUNK_BSP_OUTDOOR_SECTORS:
                             parser.setSeek(chunkEnd);  // Skip chunk

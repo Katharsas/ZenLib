@@ -321,6 +321,7 @@ namespace ZenLib
             std::vector<zCBspNode> nodes;
             std::vector<uint32_t> leafIndices;
             std::vector<uint32_t> treePolyIndices;
+            std::vector<ZMath::float3> leafLightPositions;
         };
 
         struct zCBspTreeData2
