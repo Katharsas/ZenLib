@@ -1,6 +1,7 @@
 #include "zCProgMeshProto.h"
 #include <algorithm>
 #include <string>
+#include <stdexcept>
 #include "zCMaterial.h"
 #include "zTypes.h"
 #include "zenParser.h"
@@ -51,9 +52,8 @@ namespace ZenLib
 
         if (data.empty())
         {
-            return;  // TODO: Throw an exception or something
+            throw std::invalid_argument("Not found in VDFS: " + fileName);
         }
-
         try
         {
             // Create parser from memory
