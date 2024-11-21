@@ -20,16 +20,16 @@ FetchContent_Declare(
   URL_HASH  SHA1=51844b9a8bc815a27e2cc0ffbede5fee3ef75110
 )
 
-if(NOT libsquish_POPULATED)
-  message(STATUS "ZenLib: Populating libsquish...")
-
-  FetchContent_Populate(libsquish)
-
-  SET(BUILD_SQUISH_WITH_OPENMP OFF CACHE BOOL "" FORCE)
-  add_subdirectory(${libsquish_SOURCE_DIR} ${libsquish_BINARY_DIR})
-
-  message(STATUS "ZenLib: Done populating libsquish!")
-endif()
+#if(NOT libsquish_POPULATED)
+#  message(STATUS "ZenLib: Populating libsquish...")
+#
+#  FetchContent_Populate(libsquish)
+#
+#  SET(BUILD_SQUISH_WITH_OPENMP OFF CACHE BOOL "" FORCE)
+#  add_subdirectory(${libsquish_SOURCE_DIR} ${libsquish_BINARY_DIR})
+#
+#  message(STATUS "ZenLib: Done populating libsquish!")
+#endif()
 
 # -----------------------------------------------------------------------------
 # External: physfs
